@@ -1,11 +1,11 @@
 name: update-today
 on:
   schedule:
-    - cron: "*/2 * * * *"
+    - cron: "*/2 * * * *"   # 2분마다 크롤링
   workflow_dispatch:
 
 permissions:
-  contents: write   # ← 커밋/푸시 권한
+  contents: write   # today.json 커밋/푸시 권한
 
 jobs:
   run:
@@ -22,7 +22,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      - name: Generate today.json (crawl mabimobi for Maven)
+      - name: Generate today.json (Deep Hole remaining times)
         run: |
           python scripts/update_today.py
 
@@ -31,5 +31,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add today.json
-          git commit -m "chore: update today.json [skip ci]" || echo "no changes"
+          git commit -m "chore: update deep-hole times [skip ci]" || echo "no changes"
           git push
