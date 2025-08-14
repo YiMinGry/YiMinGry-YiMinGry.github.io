@@ -49,36 +49,29 @@
         </tr>
         <tr>
             <td>구름황야</td>
-            <td id="time-cloud">-</td>
+            <td id="time_cloud">-</td>
         </tr>
         <tr>
             <td>얼음협곡</td>
-            <td id="time-ice">-</td>
+            <td id="time_ice">-</td>
         </tr>
         <tr>
             <td>어비스</td>
-            <td id="time-abyss">-</td>
+            <td id="time_abyss">-</td>
         </tr>
     </table>
-    <div class="updated" id="updated-time">마지막 갱신: -</div>
+    <div class="updated" id="updated_time">마지막 갱신: -</div>
 
     <script>
-        async function loadTimes() {
-            try {
-                const res = await fetch('today.json?_=' + Date.now()); // 캐시 방지
-                const data = await res.json();
-
-                document.getElementById('time-cloud').innerText = data.times['구름황야'] || '-';
-                document.getElementById('time-ice').innerText = data.times['얼음협곡'] || '-';
-                document.getElementById('time-abyss').innerText = data.times['어비스'] || '-';
-                document.getElementById('updated-time').innerText = '마지막 갱신: ' + (data.updated_at || '-');
-            } catch (err) {
-                console.error('데이터 불러오기 실패', err);
-            }
-        }
-
-        loadTimes();
-        setInterval(loadTimes, 60000); // 1분마다 새로 불러오기
+        fetch('today.json?_=' + new Date().getTime())
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('time_cloud').innerText = data.times["구름황야"];
+                document.getElementById('time_ice').innerText = data.times["얼음협곡"];
+                document.getElementById('time_abyss').innerText = data.times["어비스"];
+                document.getElementById('updated_time').innerText = "마지막 갱신: " + data.updated_at;
+            })
+            .catch(err => console.error("데이터 불러오기 오류:", err));
     </script>
 </body>
 </html>
