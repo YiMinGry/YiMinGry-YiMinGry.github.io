@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-mabimobi.life에서 '메이븐' 관련 텍스트를 수집해 오늘자 today.json을 갱신한다.
-- 막히는 경우(403/CORS/레이아웃 변경)에도 파일은 최소한 last_updated만 갱신되어
-  프런트( index.html )가 정상 표출되도록 설계.
+mabimobi.life '심층 구멍 알림' 영역을 크롤링해
+구름황야 / 얼음협곡 / 어비스 3종의 남은 시간을 추출하여 today.json 갱신.
+
+- 구조 변경/동적 렌더를 대비해: 페이지 전체 텍스트에서 키워드 주변의 시간 패턴을 탐지
+- 허용 시간 포맷: HH:MM[:SS], H:MM[:SS], MM:SS (필요 시 HH 계산 0으로 채움)
+- 못 찾으면 remaining=None 로 표기(프런트에서 '—' 처리)
 """
-import json, os, re, sys, datetime, time
-from typing import List, Dict
+import json, os, re, datetime, sys
+from typing import Dict, List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
-TODAY = datetime.datetime.now(KST).date()
 OUTFILE = "today.json"
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -23,136 +25,137 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-# 크롤링 후보 페이지들 (동적/정적 섞음 — 일부는 비어 있을 수 있음)
-CANDIDATES = [
-    "https://mabimobi.life/",
-    "https://mabimobi.life/ranking",
-    "https://mabimobi.life/tracker/v2",
+# 대상 구역 키워드(우선순위): 각 이름의 여러 변형도 대비
+ZONES = [
+    ("구름황야", ("구름황야", "구름 황야", "황야")),
+    ("얼음협곡", ("얼음협곡", "얼음 협곡", "협곡")),
+    ("어비스",   ("어비스", "심연", "Abyss")),
 ]
 
-TIME_RX = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b")  # HH:mm[:ss]
-END_WORDS = ("종료", "퇴장", "격퇴", "끝")
-SPAWN_WORDS = ("출현", "등장", "발견")
-PENDING_WORDS = ("예정", "관측", "감지", "추정")
+# 후보 페이지들 (여기서 텍스트를 전부 긁어 합쳐서 분석)
+CANDIDATES = [
+    "https://mabimobi.life/",
+    "https://mabimobi.life/tracker/v2",
+    "https://mabimobi.life/ranking",
+]
 
-def load_prev(path: str) -> Dict:
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except Exception:
-            return {}
-
-def iso_kt(ymd: datetime.date, hhmmss: str) -> str:
-    # hhmmss는 "HH:mm" 또는 "HH:mm:ss"
-    if len(hhmmss) == 5:
-        hhmmss += ":00"
-    dt = datetime.datetime.fromisoformat(f"{ymd}T{hhmmss}").replace(tzinfo=KST)
-    return dt.isoformat(timespec="seconds")
+# 시간 패턴: HH:MM[:SS] / H:MM[:SS] / MM:SS
+TIME_RX = re.compile(r"\b((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?|[0-5]?\d:[0-5]\d)\b")
 
 def fetch_text(url: str) -> str:
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code >= 400:
             return ""
-        # 기본은 HTML 파싱, JS 렌더 없는 경우만 수집
         soup = BeautifulSoup(r.text, "html.parser")
-        # 텍스트를 전부 긁되 공백 정리
+        # 스크립트/스타일 제거 후 텍스트
+        for bad in soup(["script", "style", "noscript"]):
+            bad.decompose()
         txt = soup.get_text("\n", strip=True)
         return txt
     except Exception:
         return ""
 
-def extract_maven_lines(txt: str) -> List[str]:
-    # '메이븐'이 들어간 줄/문장만 추출
-    lines = []
-    for line in txt.splitlines():
-        if "메이븐" in line:
-            lines.append(line.strip())
-    return lines
+def normalize_time(token: str) -> str:
+    """
+    'H:MM', 'HH:MM', 'MM:SS', 'HH:MM:SS' 를 'HH:MM:SS' 로 통일
+    """
+    parts = token.split(":")
+    if len(parts) == 3:
+        hh, mm, ss = parts
+        return f"{int(hh):02d}:{int(mm):02d}:{int(ss):02d}"
+    if len(parts) == 2:
+        a, b = parts
+        # a가 60 이상일 리 없으므로 a<60이면 MM:SS로 보고 HH=00
+        if int(a) < 60 and int(b) < 60:
+            return f"00:{int(a):02d}:{int(b):02d}"
+        # 혹시 다른 포맷이 오면 안전하게 00:00:00
+    # 기본
+    return "00:00:00"
 
-def classify_status(segment: str) -> str:
-    seg = segment.strip()
-    if any(w in seg for w in SPAWN_WORDS):
-        return "출현"
-    if any(w in seg for w in END_WORDS):
-        return "종료"
-    if any(w in seg for w in PENDING_WORDS):
-        return "관측"
-    # 기본값
-    return "관측"
+def nearest_time_around(text: str, anchor: str, window: int = 80) -> Optional[str]:
+    """
+    text에서 anchor(구역명)의 첫 등장 주변 window 글자 안에서 시간 패턴을 찾아 반환.
+    """
+    idx = text.find(anchor)
+    if idx == -1:
+        return None
+    start = max(0, idx - window)
+    end = min(len(text), idx + len(anchor) + window)
+    area = text[start:end]
+    m = TIME_RX.search(area)
+    if m:
+        return normalize_time(m.group(1))
+    return None
 
-def parse_events_from_text(ymd: datetime.date, segments: List[str]) -> List[Dict]:
-    events = []
-    seen_keys = set()
-    for seg in segments:
-        # 시간 패턴이 여러 개 박혀있을 수 있으니 모두 뽑기
-        for m in TIME_RX.finditer(seg):
-            hhmmss = ":".join([m.group(1).zfill(2), m.group(2), (m.group(3) or "00")])
-            ts = iso_kt(ymd, hhmmss)
-            status = classify_status(seg)
-            memo = seg
-            key = (ts, status, memo[:40])
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
-            events.append({
-                "time": ts,
-                "status": status,
-                "memo": memo,
-                "source": "mabimobi",
-            })
-    # 시간순 정렬
-    events.sort(key=lambda e: e["time"])
-    return events
+def extract_remaining_map(text: str) -> Dict[str, Optional[str]]:
+    """
+    각 존 이름 → 남은 시간 문자열('HH:MM:SS') 또는 None
+    """
+    result: Dict[str, Optional[str]] = {}
+    for zone_name, aliases in ZONES:
+        found = None
+        # 우선 정확/긴 별칭부터 순서대로 탐색
+        for alias in sorted(aliases, key=lambda s: -len(s)):
+            t = nearest_time_around(text, alias)
+            if t:
+                found = t
+                break
+        result[zone_name] = found
+    return result
 
-def merge_events(existing: List[Dict], new_events: List[Dict]) -> List[Dict]:
-    # 같은 timestamp+status+memo면 중복 제거
-    idx = {(e["time"], e.get("status",""), e.get("memo","")) for e in existing}
-    out = existing[:]
-    for e in new_events:
-        key = (e["time"], e.get("status",""), e.get("memo",""))
-        if key not in idx:
-            out.append(e)
-            idx.add(key)
-    out.sort(key=lambda e: e["time"])
-    return out
+def load_prev(path: str) -> Dict:
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-def build_today(prev: Dict, crawled_events: List[Dict]) -> Dict:
-    base = {
-        "boss": "메이븐",
-        "date": TODAY.strftime("%Y-%m-%d"),
-        "last_updated": datetime.datetime.now(KST).isoformat(timespec="seconds"),
-        "events": [],
-    }
-    if prev.get("date") == base["date"]:
-        base["events"] = prev.get("events", [])
+def build_payload(remap: Dict[str, Optional[str]], prev: Dict) -> Dict:
+    now = datetime.datetime.now(KST)
+    today = now.date().strftime("%Y-%m-%d")
+
+    # 기존 today와 날짜 동일하면 이전 값 유지 + 업데이트 병합
+    prev_map = {}
+    if prev.get("date") == today and isinstance(prev.get("deep_hole"), list):
+        prev_map = {item.get("zone"): item.get("remaining") for item in prev["deep_hole"]}
+
+    deep_list = []
+    for zone in [z[0] for z in ZONES]:
+        remaining = remap.get(zone)
+        if remaining is None:
+            # 새로 못 찾았으면 이전 값 유지(있다면)
+            remaining = prev_map.get(zone)
+        deep_list.append({"zone": zone, "remaining": remaining, "source": "mabimobi"})
+
     return {
-        **base,
-        "events": merge_events(base["events"], crawled_events)
+        "date": today,
+        "last_updated": now.isoformat(timespec="seconds"),
+        "deep_hole": deep_list
     }
 
 def main():
-    prev = load_prev(OUTFILE)
-
-    all_text = ""
+    # 1) 페이지들 긁어서 텍스트 합치기
+    merged = ""
     for url in CANDIDATES:
         t = fetch_text(url)
         if t:
-            all_text += "\n" + t
+            merged += "\n" + t
 
-    segments = extract_maven_lines(all_text)
-    crawled = parse_events_from_text(TODAY, segments)
+    # 2) 남은 시간 맵 추출
+    remap = extract_remaining_map(merged)
 
-    data = build_today(prev, crawled)
+    # 3) 기존 today.json 불러와 병합
+    prev = load_prev(OUTFILE)
+    payload = build_payload(remap, prev)
 
-    # 폴더 보장
-    os.makedirs(os.path.dirname(OUTFILE) or ".", exist_ok=True)
+    # 4) 저장
     with open(OUTFILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    print(f"[ok] today.json updated. events={len(data['events'])}")
+    print("[ok] today.json updated:", json.dumps(payload, ensure_ascii=False))
 
 if __name__ == "__main__":
     sys.exit(main())
