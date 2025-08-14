@@ -1,7 +1,7 @@
 name: update-today
 on:
   schedule:
-    - cron: "*/2 * * * *"   # 2분마다 (1분도 가능하지만 보장X)
+    - cron: "*/2 * * * *"   # 2분마다
   workflow_dispatch:
 
 jobs:
@@ -10,24 +10,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.x' }
+        with:
+          python-version: '3.x'
       - run: pip install requests beautifulsoup4
       - name: Generate today.json
         run: |
-          python - <<'PY'
-import json, datetime
-# TODO: 여기서 실제 크롤링해 today.json 생성/갱신
-now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-data = {
-  "boss":"메이븐",
-  "date": now.strftime("%Y-%m-%d"),
-  "last_updated": now.isoformat(timespec="seconds"),
-  "events":[
-    # 크롤링/파싱 결과로 대체
-  ]
-}
-open("today.json","w",encoding="utf-8").write(json.dumps(data, ensure_ascii=False, indent=2))
-PY
+          import json, datetime
+          now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+          data = {
+              "boss": "메이븐",
+              "date": now.strftime("%Y-%m-%d"),
+              "last_updated": now.isoformat(timespec="seconds"),
+              "events": []
+          }
+          # 크롤링/파싱 결과로 events 채우기
+          with open("today.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
