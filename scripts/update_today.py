@@ -3,70 +3,59 @@ import json
 from datetime import datetime
 from playwright.async_api import async_playwright
 
-URLS = {
-    "구름황야": "https://mabimobi.life/",
-    "얼음협곡": "https://mabimobi.life/",
-    "어비스": "https://mabimobi.life/"
-}
-
-# alt 값에 띄어쓰기나 접두어/접미어가 붙어도 찾을 수 있도록 핵심 키워드만 사용
-ALT_KEYWORDS = {
-    "구름황야": "구름",
-    "얼음협곡": "얼음",
+# 심층 던전 정보
+DUNGEONS = {
+    "구름황야": "구름황야",
+    "얼음협곡": "얼음협곡",
     "어비스": "어비스"
 }
 
-async def get_time_from_page(browser, url, keyword):
-    page = await browser.new_page()
-    await page.goto(url, wait_until="networkidle")
-
-    # alt 속성에 특정 키워드가 포함된 이미지 찾기
-    img_selector = f'img[alt*="{keyword}"]'
+async def get_time_from_page(page, keyword):
     try:
-        await page.wait_for_selector(img_selector, timeout=10000)
-    except:
-        await page.close()
+        # 해당 던전 이름이 포함된 구역 찾기
+        header = await page.wait_for_selector(f"text={keyword}", timeout=10000)
+        container = await header.evaluate_handle("el => el.closest('div')")
+        
+        # 그 구역 안에서 digit__num 요소들 찾기
+        spans = await container.query_selector_all(".digit__num")
+        digits = []
+        for span in spans:
+            style = await span.get_attribute("style")  # 예: "--n: 1;"
+            if style and "--n:" in style:
+                num = style.split("--n:")[1].split(";")[0].strip()
+                digits.append(num)
+        
+        # 시간 형식으로 합치기 (예: ['0','1',':','2','3'] → "01:23")
+        if digits:
+            time_str = "".join(digits)
+            return time_str
+        else:
+            return "오류"
+    except Exception as e:
+        print(f"{keyword} 가져오기 실패: {e}")
         return "오류"
-
-    # 이미지가 포함된 블록에서 시간 추출
-    img_element = await page.query_selector(img_selector)
-    parent_block = await img_element.evaluate_handle("el => el.closest('.h-\\[78px\\]') || el.parentElement")
-
-    if not parent_block:
-        await page.close()
-        return "오류"
-
-    # 시간 숫자(span.digit__num) 모두 모아서 합침
-    digits = await parent_block.query_selector_all(".digit__num")
-    time_str = "".join([await d.inner_text() for d in digits])
-
-    await page.close()
-    return time_str if time_str else "오류"
 
 async def main_async():
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        results = {}
-
-        for name, url in URLS.items():
+        page = await browser.new_page()
+        await page.goto("https://mabimobi.life/", timeout=60000)
+        
+        times = {}
+        for name, keyword in DUNGEONS.items():
             print(f"크롤링 중: {name}")
-            keyword = ALT_KEYWORDS[name]
-            try:
-                results[name] = await get_time_from_page(browser, url, keyword)
-            except Exception as e:
-                print(f"{name} 가져오기 실패: {e}")
-                results[name] = "오류"
-
+            times[name] = await get_time_from_page(page, keyword)
+        
         await browser.close()
-
+        
         data = {
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "times": results
+            "times": times
         }
-
+        
         with open("today.json", "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-
+        
         print("저장 완료:", data)
 
 def main():
