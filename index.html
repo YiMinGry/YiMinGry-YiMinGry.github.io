@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>심층 구멍 알림 – 메이븐 | 오늘 출현 이력</title>
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <style>
+    :root{
+      --bg:#0b0d10; --card:#111418; --muted:#8b95a7; --fg:#e7ecf4; --accent:#79ffe1; --accent2:#8ec5ff; --danger:#ff6b6b; --ok:#38ef7d;
+      --border: #1b2027;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 10% 0%, rgba(126, 213, 111, 0.08), transparent 40%),
+                  radial-gradient(1200px 700px at 90% 0%, rgba(126, 173, 255, 0.10), transparent 40%),
+                  var(--bg);
+      color:var(--fg);
+    }
+    .wrap{max-width:980px; margin:40px auto; padding:0 16px}
+    header{
+      display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px;
+    }
+    .title{
+      line-height:1.15;
+      font-weight:800;
+      font-size:clamp(22px, 3vw, 34px);
+      letter-spacing:-0.3px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .badge{font-size:13px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:linear-gradient(180deg,#131821,#0e1217); color:var(--muted)}
+    .meta{display:flex; gap:12px; align-items:center; color:var(--muted); font-size:13px}
+    .tick{font-variant-numeric:tabular-nums}
+    .card{
+      background:linear-gradient(180deg,#0f1318,#0c1014);
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:0 8px 32px rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    .card .head{
+      display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--border);
+      background: linear-gradient(90deg, rgba(121,255,225,.08), transparent 40%, rgba(142,197,255,.08) 60%, transparent);
+    }
+    .card .head h2{
+      margin:0; font-size:16px; letter-spacing:.2px; color:#cfe6ff; font-weight:700
+    }
+    .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; font-size:12px; color:var(--muted)}
+    table{width:100%; border-collapse:collapse}
+    th, td{padding:12px 14px; border-bottom:1px solid var(--border)}
+    th{font-size:12px; color:#aab6c6; text-align:left; letter-spacing:.3px; font-weight:700; text-transform:uppercase}
+    td{font-size:15px}
+    tbody tr:hover{background:rgba(255,255,255,0.02)}
+    .status{display:inline-flex; align-items:center; gap:8px; font-weight:700}
+    .dot{width:9px; height:9px; border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--accent2)}
+    .dot.stop{background:var(--danger)}
+    .muted{color:var(--muted)}
+    .empty{padding:28px; text-align:center; color:var(--muted)}
+    .flash{animation: flash .8s ease}
+    @keyframes flash{from{background:rgba(121,255,225,.12)} to{background:transparent}}
+    footer{margin-top:16px; color:var(--muted); font-size:12px}
+    a{color:#b6d6ff; text-decoration:none}
+    a:hover{text-decoration:underline}
+    .hint{font-size:12px; color:#93a1b3}
+    .sr-only{position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); border:0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="title">
+          🕳️ 심층 구멍 알림 – <span style="background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent">메이븐</span>
+          <span class="badge">오늘 출현 이력</span>
+        </div>
+        <div class="meta">
+          <div class="tick" id="clock">--:--:--</div>
+          <div class="pill">마지막 데이터 갱신: <span id="updated" class="tick">-</span></div>
+          <div class="pill">소스: <code id="src">today.json</code></div>
+        </div>
+      </div>
+      <div class="hint">이 페이지는 1초마다 <code>today.json</code>을 다시 불러옵니다.</div>
+    </header>
+
+    <section class="card">
+      <div class="head">
+        <h2>오늘의 기록 <span id="dateLabel" class="muted" aria-label="date"></span></h2>
+        <span id="count" class="pill">0건</span>
+      </div>
+      <div class="tablewrap">
+        <table aria-label="메이븐 오늘 출현 이력">
+          <thead>
+            <tr>
+              <th style="width:140px">시간</th>
+              <th style="width:160px">상태</th>
+              <th>메모</th>
+              <th style="width:160px">출처</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="4" class="empty">아직 출현 기록이 없어요.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>※ `today.json`은 외부 크롤러/액션이 갱신해야 합니다. 브라우저에서 외부 사이트 직접 크롤링은 CORS/403으로 제한될 수 있어요.</p>
+    </footer>
+  </div>
+
+  <script>
+    // ===== 설정 =====
+    // 같은 레포에 today.json을 둘 경우:
+    const DATA_URL = 'today.json';
+    // 원한다면 raw 깃허브 URL로 교체:
+    // const DATA_URL = 'https://raw.githubusercontent.com/<USER>/<REPO>/main/today.json';
+
+    document.getElementById('src').textContent = DATA_URL;
+
+    let lastJSON = '';
+    let lastRenderStamp = 0;
+
+    // 매초 시계 & 데이터 확인
+    setInterval(() => {
+      updateClock();
+      fetchAndMaybeRender();
+    }, 1000);
+
+    updateClock();
+    fetchAndMaybeRender();
+
+    function updateClock(){
+      const now = new Date();
+      const ko = new Intl.DateTimeFormat('ko-KR',{
+        hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false, timeZone:'Asia/Seoul'
+      }).format(now);
+      document.getElementById('clock').textContent = ko;
+    }
+
+    async function fetchAndMaybeRender(){
+      try{
+        const res = await fetch(DATA_URL + '?_=' + Date.now(), { cache: 'no-store' });
+        if(!res.ok){ throw new Error('HTTP '+res.status); }
+        const data = await res.json();
+
+        // 안정적 비교를 위해 정렬/정규화 후 문자열화
+        const norm = normalizeData(data);
+        const jsonStr = JSON.stringify(norm);
+
+        if(jsonStr !== lastJSON){
+          lastJSON = jsonStr;
+          render(norm);
+          flash();
+        }
+        setUpdated(norm.last_updated || new Date().toISOString());
+      }catch(err){
+        // 에러시에도 표시 유지, 업데이트 타임만 에러로
+        setUpdated('데이터 불러오기 실패');
+        console.error(err);
+      }
+    }
+
+    function flash(){
+      const card = document.querySelector('.card');
+      card.classList.remove('flash');
+      // reflow trick
+      void card.offsetWidth;
+      card.classList.add('flash');
+    }
+
+    function setUpdated(ts){
+      const el = document.getElementById('updated');
+      try{
+        const date = typeof ts === 'string' ? new Date(ts) : ts;
+        const fmt = new Intl.DateTimeFormat('ko-KR', {
+          dateStyle:'medium', timeStyle:'medium', timeZone:'Asia/Seoul'
+        }).format(date);
+        el.textContent = fmt;
+      }catch{
+        el.textContent = ts;
+      }
+    }
+
+    function normalizeData(d){
+      // 기대 스키마:
+      // {
+      //   "boss": "메이븐",
+      //   "date": "YYYY-MM-DD",
+      //   "last_updated": "ISO8601",
+      //   "events":[
+      //     {"time":"ISO8601_or_HH:mm:ss","status":"출현|종료|예정|관측","memo":"...", "source":"...", "channel":"..."}
+      //   ]
+      // }
+      const out = {
+        boss: (d && d.boss) || "메이븐",
+        date: (d && d.date) || toYMD(new Date()),
+        last_updated: (d && d.last_updated) || new Date().toISOString(),
+        events: Array.isArray(d && d.events) ? d.events.slice() : []
+      };
+      // 문자열 안전화 & 시간 정렬
+      for (const e of out.events){
+        e.status = e.status || '';
+        e.memo = e.memo || '';
+        e.source = e.source || '';
+        e.time = normalizeTime(e.time);
+      }
+      out.events.sort((a,b)=> new Date(a.time) - new Date(b.time));
+      return out;
+    }
+
+    function toYMD(dt){
+      const tz = new Date(dt.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const y = tz.getFullYear();
+      const m = String(tz.getMonth()+1).padStart(2,'0');
+      const d = String(tz.getDate()).padStart(2,'0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function normalizeTime(t){
+      // 허용: ISO8601 or "HH:mm" or "HH:mm:ss"
+      if(!t) return new Date().toISOString();
+      if(/^\d{2}:\d{2}(:\d{2})?$/.test(t)){
+        const now = new Date();
+        const ymd = toYMD(now);
+        const hhmmss = t.length===5 ? t + ':00' : t;
+        return new Date(`${ymd}T${hhmmss}+09:00`).toISOString();
+      }
+      // fallback parse
+      const d = new Date(t);
+      return isNaN(d) ? new Date().toISOString() : d.toISOString();
+    }
+
+    function render(d){
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      const dateLabel = document.getElementById('dateLabel');
+      dateLabel.textContent = `(${d.date})`;
+      document.getElementById('count').textContent = `${d.events.length}건`;
+
+      if(d.events.length === 0){
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">아직 출현 기록이 없어요.</td></tr>';
+        return;
+      }
+
+      for(const e of d.events){
+        const tr = document.createElement('tr');
+
+        const tCell = document.createElement('td');
+        tCell.className = 'tick';
+        tCell.textContent = new Intl.DateTimeFormat('ko-KR',{
+          hour:'2-digit', minute:'2-digit', second:'2-digit',
+          hour12:false, timeZone:'Asia/Seoul'
+        }).format(new Date(e.time));
+        tr.appendChild(tCell);
+
+        const sCell = document.createElement('td');
+        const stat = e.status || '';
+        const dot = document.createElement('span');
+        dot.className = 'dot ' + (
+          stat.includes('출현') ? 'ok' :
+          stat.includes('예정') || stat.includes('관측') ? 'warn' :
+          'stop'
+        );
+        const label = document.createElement('span');
+        label.textContent = stat || '—';
+        const wrap = document.createElement('span');
+        wrap.className = 'status';
+        wrap.appendChild(dot);
+        wrap.appendChild(label);
+        sCell.appendChild(wrap);
+        tr.appendChild(sCell);
+
+        const mCell = document.createElement('td');
+        mCell.innerHTML = esc(e.memo || '');
+        tr.appendChild(mCell);
+
+        const srcCell = document.createElement('td');
+        srcCell.innerHTML = e.source ? `<span class="muted">${esc(e.source)}</span>` : '<span class="muted">today.json</span>';
+        tr.appendChild(srcCell);
+
+        tbody.appendChild(tr);
+      }
+    }
+
+    function esc(s){
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+  </script>
+</body>
+</html>
