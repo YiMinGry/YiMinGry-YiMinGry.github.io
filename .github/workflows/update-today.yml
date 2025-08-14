@@ -1,40 +1,35 @@
-name: update-today
+name: Update Today Times
+
 on:
   schedule:
-    - cron: "*/2 * * * *"   # 2분마다 (UTC)
-  workflow_dispatch:
-
-permissions:
-  contents: write   # today.json 커밋/푸시 권한
+    - cron: "0 * * * *" # 매 정시마다 실행 (UTC 기준, 한국은 +9h)
+  workflow_dispatch: # 수동 실행 가능
 
 jobs:
-  run:
+  update-times:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.11"
 
-      - name: Install deps (Playwright + Chromium)
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install playwright beautifulsoup4 requests
-          playwright install --with-deps chromium
+          pip install playwright
+          playwright install chromium
 
-      - name: Generate today.json (render & crawl)
-        env:
-          DEBUG: "1"                       # 로그 보고 싶으면 1, 조용히 돌리면 0
-          TARGET_URL: "https://mabimobi.life/"
-        run: |
-          python scripts/update_today.py
+      - name: Run update_today.py
+        run: python scripts/update_today.py
 
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add today.json
-          git commit -m "chore: update deep-hole remaining times [skip ci]" || echo "no changes"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Auto update times: $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
           git push
