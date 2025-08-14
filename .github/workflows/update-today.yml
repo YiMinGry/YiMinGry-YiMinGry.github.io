@@ -5,11 +5,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # today.json 커밋/푸시 권한
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +26,7 @@ jobs:
 
       - name: Generate today.json (render & crawl)
         env:
-          DEBUG: "1"
+          DEBUG: "1"                       # 로그 보고 싶으면 1, 조용히 돌리면 0
           TARGET_URL: "https://mabimobi.life/"
         run: |
           python scripts/update_today.py
