@@ -2,7 +2,7 @@ name: Update Today Times
 
 on:
   schedule:
-    - cron: "0 * * * *" # 매 정시마다 실행 (UTC 기준, 한국은 +9h)
+    - cron: "*/5 * * * *" # 5분마다 실행 (UTC 기준)
   workflow_dispatch: # 수동 실행 가능
 
 jobs:
