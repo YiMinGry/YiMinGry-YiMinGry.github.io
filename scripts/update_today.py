@@ -134,27 +134,30 @@ async def render_and_extract() -> Dict[str, Optional[str]]:
                 )
 
                 # 1) shadowRoot에서 숫자 직접 읽기
-                digits_groups: List[str] = await row.evaluate("""
-                  (el) => {
-                    // 시간행 내부의 <number-flow-react> 들을 순서대로 읽음
-                    const flows = el.querySelectorAll('number-flow-react');
-                    const groups = [];
-                    flows.forEach(flow => {
-                      const root = flow.shadowRoot;
-                      if (!root) return;
-                      // 각 digit 그룹(span.digit.integer-digit ...)의 style="--current: X"에서 X를 이어붙임
-                      const digitSpans = root.querySelectorAll('span.digit.integer-digit');
-                      let s = '';
-                      digitSpans.forEach(d => {
-                        const st = d.getAttribute('style') || '';
-                        const m = st.match(/--current:\\s*(\\d+)/);
-                        if (m) s += m[1];
-                      });
-                      if (s) groups.push(s);
-                    });
-                    return groups;
-                  }
-                """)
+digits_groups: List[str] = await row.evaluate("""
+  (el) => {
+    // 시간행 내부의 <number-flow-react> 들을 순서대로 읽음
+    const flows = el.querySelectorAll('number-flow-react');
+    const groups = [];
+    flows.forEach(flow => {
+      const root = flow.shadowRoot;
+      if (!root) return;
+
+      // ✅ 'integer-digit'이 class가 아니라 part 속성에 있음
+      // 각 digit span의 style="--current: X"에서 X를 읽어 숫자 조합
+      const digitSpans = root.querySelectorAll('span[part~="digit"][part~="integer-digit"][style*="--current"]');
+      let s = '';
+      digitSpans.forEach(d => {
+        const st = d.getAttribute('style') || '';
+        const m = st.match(/--current:\\s*(\\d+)/);
+        if (m) s += m[1];
+      });
+
+      if (s) groups.push(s);
+    });
+    return groups;
+  }
+""")
 
                 remaining = None
                 if digits_groups and any(digits_groups):
@@ -246,3 +249,4 @@ def main(): asyncio.run(main_async())
 
 if __name__ == "__main__":
     sys.exit(main())
+
