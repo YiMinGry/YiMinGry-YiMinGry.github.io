@@ -1,7 +1,7 @@
 name: update-today
 on:
   schedule:
-    - cron: "*/5 * * * *"   # 2분마다 크롤링
+    - cron: "*/2 * * * *"   # 2분마다 (UTC 기준)
   workflow_dispatch:
 
 permissions:
@@ -17,12 +17,16 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install deps
+      - name: Install deps (Playwright + Chromium)
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install playwright
+          playwright install --with-deps chromium
 
-      - name: Generate today.json (Deep Hole remaining times)
+      - name: Generate today.json (render & crawl)
+        env:
+          DEBUG: "1"                       # 로그 보고 싶으면 1, 조용히 돌리려면 0
+          TARGET_URL: "https://mabimobi.life/"
         run: |
           python scripts/update_today.py
 
@@ -31,5 +35,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add today.json
-          git commit -m "chore: update deep-hole times [skip ci]" || echo "no changes"
+          git commit -m "chore: update deep-hole remaining times [skip ci]" || echo "no changes"
           git push
