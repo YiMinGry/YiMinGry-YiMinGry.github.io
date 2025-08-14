@@ -1,154 +1,65 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>심층 구멍 알림 – 남은 시간</title>
-  <meta http-equiv="Cache-Control" content="no-store" />
-  <style>
-    :root{
-      --bg:#0b0d10; --card:#111418; --muted:#8b95a7; --fg:#e7ecf4;
-      --accent:#79ffe1; --accent2:#8ec5ff; --warn:#ffd166; --danger:#ff6b6b; --ok:#37eb8b;
-      --border:#1b2027;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",Arial}
-    .wrap{max-width:980px;margin:36px auto;padding:0 16px}
-    header{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
-    .title{font-size:clamp(22px,3vw,34px);font-weight:800;letter-spacing:-.2px}
-    .meta{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:13px}
-    .pill{border:1px solid var(--border);border-radius:999px;padding:6px 10px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-    .card{background:linear-gradient(180deg,#0f1318,#0c1014);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
-    .name{font-weight:800;letter-spacing:.2px;margin-bottom:8px}
-    .time{font-variant-numeric:tabular-nums; font-size:34px; font-weight:800}
-    .hint{color:var(--muted);font-size:12px}
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .danger{color:var(--danger)}
-    .flash{animation:flash .8s}
-    @keyframes flash{from{background:rgba(121,255,225,.12)} to{background:transparent}}
-    footer{margin-top:16px;color:var(--muted);font-size:12px}
-    code{color:#b6d6ff}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>심층 구멍 남은 시간</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            text-align: center;
+            padding: 50px;
+        }
+        h1 {
+            color: #333;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 15px 30px;
+            border-bottom: 1px solid #eee;
+            font-size: 1.2em;
+        }
+        th {
+            background: #f1f3f5;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .updated {
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="title">🕳️ 심층 구멍 알림 – 남은 시간</div>
-      <div class="meta">
-        <span class="pill">마지막 데이터 갱신: <span id="updated">-</span></span>
-        <span class="pill">시계: <span id="clock">--:--:--</span></span>
-        <span class="pill">소스: <code id="src">today.json</code></span>
-      </div>
-    </header>
-
-    <section class="grid" id="grid">
-      <!-- JS가 카드 3개 생성 -->
-    </section>
-
-    <footer>
-      <p>※ 이 페이지는 1초마다 <code>today.json</code>을 다시 읽고, 각 존의 남은 시간을 카운트다운합니다.</p>
-    </footer>
-  </div>
-
-  <script>
-    // ===== 설정 =====
-    const DATA_URL = 'today.json'; // 같은 브랜치/폴더에 위치
-    document.getElementById('src').textContent = DATA_URL;
-
-    const ZONES = ["구름황야", "얼음협곡", "어비스"];
-    const state = {}; // zone -> remainingSec
-
-    // 카드 만들기
-    const grid = document.getElementById('grid');
-    const cards = {};
-    for(const z of ZONES){
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <div class="name">${z}</div>
-        <div class="time" id="t_${z}">—</div>
-        <div class="hint" id="h_${z}">남은 시간</div>
-      `;
-      grid.appendChild(card);
-      cards[z] = card;
-    }
-
-    function setUpdated(ts){
-      try{
-        const d = new Date(ts);
-        const s = new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium', timeStyle:'medium', timeZone:'Asia/Seoul'}).format(d);
-        document.getElementById('updated').textContent = s;
-      }catch{ document.getElementById('updated').textContent = ts; }
-    }
-
-    function hmsToSec(hms){
-      // "HH:MM:SS"
-      const [h,m,s] = hms.split(':').map(x=>parseInt(x,10)||0);
-      return h*3600 + m*60 + s;
-    }
-    function secToHMS(sec){
-      if(sec == null || !isFinite(sec) || sec < 0) return "—";
-      const h = Math.floor(sec/3600);
-      const m = Math.floor((sec%3600)/60);
-      const s = Math.floor(sec%60);
-      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    }
-    function applySeverity(el, sec){
-      el.classList.remove('ok','warn','danger');
-      if(sec == null || !isFinite(sec)) return;
-      if(sec <= 300) el.classList.add('danger');      // 5분 이하
-      else if(sec <= 900) el.classList.add('warn');   // 15분 이하
-      else el.classList.add('ok');
-    }
-
-    async function pull(){
-      try{
-        const res = await fetch(DATA_URL + '?_=' + Date.now(), {cache:'no-store'});
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        const data = await res.json();
-        setUpdated(data.last_updated || new Date().toISOString());
-        // deep_hole: [{zone, remaining}]
-        let changed = false;
-        for(const z of ZONES){
-          const item = (data.deep_hole||[]).find(e=>e.zone===z);
-          const prev = state[z];
-          const next = item && item.remaining ? hmsToSec(item.remaining) : null;
-          if(prev !== next){
-            state[z] = next;
-            changed = true;
-            const tEl = document.getElementById('t_'+z);
-            tEl.textContent = secToHMS(next);
-            applySeverity(tEl, next);
-          }
-        }
-        if(changed){
-          document.querySelector('.grid').classList.remove('flash'); void grid.offsetWidth;
-          document.querySelector('.grid').classList.add('flash');
-        }
-      }catch(e){
-        setUpdated('데이터 불러오기 실패');
-        console.error(e);
-      }
-    }
-
-    // 1초마다 시계/카운트다운/데이터 동기화
-    setInterval(()=>{
-      // 시계
-      document.getElementById('clock').textContent =
-        new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'Asia/Seoul'}).format(new Date());
-      // 카운트다운
-      for(const z of ZONES){
-        if(state[z]==null) continue;
-        state[z] = Math.max(0, state[z]-1);
-        const tEl = document.getElementById('t_'+z);
-        tEl.textContent = secToHMS(state[z]);
-        applySeverity(tEl, state[z]);
-      }
-      // 데이터 재요청
-      pull();
-    }, 1000);
-
-    pull(); // 초기 1회
-  </script>
+    <h1>심층 구멍 남은 시간</h1>
+    <table>
+        <tr>
+            <th>종류</th>
+            <th>남은 시간</th>
+        </tr>
+        <tr>
+            <td>구름황야</td>
+            <td>{{TIME_CLOUD}}</td>
+        </tr>
+        <tr>
+            <td>얼음협곡</td>
+            <td>{{TIME_ICE}}</td>
+        </tr>
+        <tr>
+            <td>어비스</td>
+            <td>{{TIME_ABYSS}}</td>
+        </tr>
+    </table>
+    <div class="updated">마지막 갱신: {{UPDATED}}</div>
 </body>
 </html>
