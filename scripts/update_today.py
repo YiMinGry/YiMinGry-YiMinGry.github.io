@@ -7,8 +7,9 @@ mabimobi.life '심층 구멍 알림'의 모바일 섹션에서
 - Playwright로 DOM 렌더
 - 모바일 카드(.rounded-lg & .overflow-hidden)에서 시간행
   (.w-full.flex.items-center.gap-1.rounded-xl...opacity-50) 추출
-- 시간 숫자는 <number-flow-react> shadowRoot 내부 'part="digit integer-digit"'
-  들의 style="--current: N" 값을 이어붙여 만듦
+- 시간 숫자는 <number-flow-react> shadowRoot 내부의 각 자리 컨테이너
+  (span[part~="digit"][part~="integer-digit"])에서 style="--current:N" 값을 읽고,
+  자식 span.digit__num 중 style="--n:N"인 텍스트를 골라 조합
 - 실패 시 .number__inner 보조 스캔
 """
 
@@ -99,6 +100,8 @@ async def render_and_extract() -> Dict[str, Optional[str]]:
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
+        ctx = await pw.chromium.connect_over_cdp
+        browser = await pw.chromium.launch(headless=True)
         ctx = await browser.new_context(
             user_agent=UA,
             locale="ko-KR",
@@ -172,24 +175,47 @@ async def render_and_extract() -> Dict[str, Optional[str]]:
                       (el) => {
                         const flows = el.querySelectorAll('number-flow-react');
                         const groups = [];
+
                         flows.forEach(flow => {
                           const root = flow.shadowRoot;
                           if (!root) return;
 
-                          // part="digit integer-digit" 이면서 style에 --current 포함된 스팬 수집
-                          const digitSpans = root.querySelectorAll(
-                            'span[part~="digit"][part~="integer-digit"][style*="--current"]'
-                          );
-                          let s = '';
-                          digitSpans.forEach(d => {
-                            const st = d.getAttribute('style') || '';
-                            const m = st.match(/--current:\\s*(\\d+)/);
-                            if (m) s += m[1];
+                          // 각 자리 컨테이너: part="digit integer-digit"
+                          const digitContainers = root.querySelectorAll('span[part~="digit"][part~="integer-digit"]');
+                          let numStr = '';
+
+                          digitContainers.forEach(dc => {
+                            // 현재 인덱스(cur): style의 --current 또는 computed style
+                            let cur = null;
+                            const styleAttr = dc.getAttribute('style') || '';
+                            let m = styleAttr.match(/--current:\\s*(\\d+)/);
+                            if (m) {
+                              cur = parseInt(m[1], 10);
+                            } else {
+                              const cv = getComputedStyle(dc).getPropertyValue('--current');
+                              if (cv && /^\\d+$/.test(cv.trim())) cur = parseInt(cv.trim(), 10);
+                            }
+                            if (cur == null || isNaN(cur)) return;
+
+                            // 자식 digit__num들 중 --n == cur 을 가진 텍스트 선택
+                            const candidates = dc.querySelectorAll('span.digit__num');
+                            let picked = null;
+                            for (const c of candidates) {
+                              const st = c.getAttribute('style') || '';
+                              const mm = st.match(/--n:\\s*(\\d+)/);
+                              if (mm && parseInt(mm[1], 10) === cur) {
+                                picked = c.textContent.trim();
+                                break;
+                              }
+                            }
+                            if (!picked && candidates.length) picked = candidates[0].textContent.trim();
+                            numStr += (picked ? picked : '0');
                           });
 
-                          if (s) groups.push(s);
+                          if (numStr) groups.push(numStr);
                         });
-                        return groups;
+
+                        return groups; // 예: ["01","23","45"] → HH, MM, SS
                       }
                     """)
 
