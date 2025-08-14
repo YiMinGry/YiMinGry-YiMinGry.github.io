@@ -1,38 +1,39 @@
-name: Update Today JSON
+name: Update Today Times
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # 5분 간격 실행
-  workflow_dispatch:       # 수동 실행도 가능
-
-permissions:
-  contents: write   # push 권한 추가
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
-  update-today:
+  update-times:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install playwright && playwright install chromium
+        run: |
+          pip install playwright
+          playwright install chromium
 
       - name: Run script
-        run: python scripts/update_today.py
+        run: |
+          python scripts/update_today.py
 
       - name: Commit and push changes
         run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-        git pull --rebase origin main
-        git add today.json
-        git commit -m "Update today.json" || echo "No changes to commit"
-        git push origin main
-
+          git pull --rebase origin main
+          git add today.json
+          git commit -m "Update today.json" || echo "No changes to commit"
+          git push origin main
