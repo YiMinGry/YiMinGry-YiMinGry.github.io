@@ -99,8 +99,7 @@ async def render_and_extract() -> Dict[str, Optional[str]]:
     out: Dict[str, Optional[str]] = {}
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
-        ctx = await pw.chromium.connect_over_cdp
+        # 정상 흐름: launch → new_context
         browser = await pw.chromium.launch(headless=True)
         ctx = await browser.new_context(
             user_agent=UA,
