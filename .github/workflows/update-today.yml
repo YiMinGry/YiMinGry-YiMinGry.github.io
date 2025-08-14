@@ -1,7 +1,7 @@
 name: update-today
 on:
   schedule:
-    - cron: "*/2 * * * *"   # 2분마다 크롤링
+    - cron: "*/5 * * * *"   # 2분마다 크롤링
   workflow_dispatch:
 
 permissions:
