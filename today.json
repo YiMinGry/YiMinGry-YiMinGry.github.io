@@ -1,6 +1,21 @@
 {
-  "boss": "메이븐",
   "date": "2025-08-14",
-  "last_updated": "2025-08-14T19:29:21+09:00",
-  "events": []
+  "last_updated": "2025-08-14T19:31:58+09:00",
+  "deep_hole": [
+    {
+      "zone": "구름황야",
+      "remaining": null,
+      "source": "mabimobi"
+    },
+    {
+      "zone": "얼음협곡",
+      "remaining": null,
+      "source": "mabimobi"
+    },
+    {
+      "zone": "어비스",
+      "remaining": null,
+      "source": "mabimobi"
+    }
+  ]
 }
